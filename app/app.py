@@ -1,57 +1,82 @@
-Answer:
-
 Flask API:
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username'] 
-        password = request.form['password'] 
-        url = request.form['url'] 
-        repository_name = request.form['repository_name']
-        if authenticate(username, password, url, repository_name):
-            return redirect(url_for('home'))
-        else:
-            return redirect(url_for('login'))
- 
-    return render_template('login.html')
+from flask import Flask, request, jsonify
+from jira import JIRA
 
-@app.route('/home', methods=['GET', 'POST'])
-def home():
-    if request.method == 'POST':
-        title = request.form['title']
-        username = request.form['username']
-        url = request.form['url']
- 
-        if not validate_details(username, url):
-            return redirect(url_for('home'))
- 
-        if request.form.get('edit'):
-            edit_jira_details(title, username, url)
-        elif request.form.get('delete'):
-            delete_jira_details(title, username, url)
-        elif request.form.get('add_more'):
-            return redirect(url_for('configure_jira'))
- 
-        jira_details = get_jira_details()
-        pagination = get_pagination()
- 
-    return render_template('home.html', jira_details=jira_details, pagination=pagination)
+app = Flask(__name__)
 
 @app.route('/configure_jira', methods=['GET', 'POST'])
 def configure_jira():
     if request.method == 'POST':
-        username = request.form['username'] 
-        password = request.form['password'] 
-        url = request.form['url'] 
-        repository_name = request.form['repository_name']
- 
-        response = java_api_validate(username, password, url, repository_name)
- 
-        if response == 'success':
-            add_jira_details(username, url, repository_name)
-            return redirect(url_for('home'))
+        username = request.form.get('username')
+        password = request.form.get('password')
+        url = request.form.get('url')
+        repo_name = request.form.get('repo_name')
+        jira = JIRA(username, password, url, repo_name)
+        if jira.authenticate():
+            return jsonify({
+                'result': 'Successfully configured Jira Software'
+            })
         else:
-            return redirect(url_for('configure_jira'))
- 
-    return render_template('configure_jira.html')
+            return jsonify({
+                'result': 'Failed to configure Jira Software'
+            })
+    else:
+        return jsonify({
+            'result': 'Request method must be POST'
+        })
+
+@app.route('/list_jira', methods=['GET'])
+def list_jira():
+    title = request.args.get('title')
+    user_name = request.args.get('user_name')
+    url = request.args.get('url')
+    action = request.args.get('action')
+    show_entries = request.args.get('show_entries')
+    pagination = request.args.get('pagination')
+    jira_list = [
+        {
+            'title': title,
+            'user_name': user_name,
+            'url': url,
+            'action': action
+        }
+    ]
+    return jsonify({
+        'show_entries': show_entries,
+        'pagination': pagination,
+        'jira_list': jira_list
+    })
+
+@app.route('/edit_jira', methods=['PUT'])
+def edit_jira():
+    title = request.form.get('title')
+    user_name = request.form.get('user_name')
+    url = request.form.get('url')
+    jira_list = [
+        {
+            'title': title,
+            'user_name': user_name,
+            'url': url
+        }
+    ]
+    return jsonify({
+        'result': 'Successfully edited jira list',
+        'jira_list': jira_list
+    })
+
+@app.route('/delete_jira', methods=['DELETE'])
+def delete_jira():
+    title = request.form.get('title')
+    jira_list = [
+        {
+            'title': title
+        }
+    ]
+    return jsonify({
+        'result': 'Successfully deleted jira list',
+        'jira_list': jira_list
+    })
+
+if __name__ == '__main__':
+    app.run()
